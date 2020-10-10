@@ -64,7 +64,7 @@ class MessageSave:
         # String for filename to be saved
         fileName = ''
         # Create the directory
-        Path(directory).mkdir()
+        Path(directory).mkdir(parents=True)
 
         # Read the message header for the parameters used in this Email
         while True:
@@ -155,7 +155,7 @@ class MessageSave:
             dataLine = dataLine.rstrip()
             # Check if we meet the boundary in MIME message
             # Here we use equals instead of matchs because the matches opration may be confused due to the Escape character in the boudnary string
-            if mime and dataLine == boundary:
+            if mime and dataLine[:2] == '--' and dataLine[2:] == boundary:
                 # TODO finished?
                 break
             # if the Email is non-MIME, Single Part or without header, save the body
@@ -281,9 +281,9 @@ class MessageSave:
         extension = ''
 
         if prefix == '':
-            entry = Path(self.Today() + '_' + str(counter))
+            entry = Path(os.path.join(path, self.Today() + '_' + str(counter)))
         else:
-            entry = Path(prefix)
+            entry = Path(os.path.join(path, prefix))
 
         if prefix.rfind('.') >= 0:
             extension = prefix[prefix.rfind('.'):]
