@@ -17,7 +17,7 @@ import threading
 from SMTPConnection import SMTPConnection
 
 # The address is set to localhost, port number to 1111
-HOST = '127.0.0.1'
+HOST = '0.0.0.0'
 PORT = 1111
 ADDR = (HOST, PORT)
 if __name__ == '__main__':
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     serversock.listen(5)
 
     # Process SMTP client requests in an infinite loop.
-    while 1:
+    while True:
         # Listen for a TCP connection request.
         print('waiting for connection...')
         clientsock, addr = serversock.accept()
