@@ -81,6 +81,6 @@ def send_text(send_from, send_to, subject, message):
 
 
 if __name__ == '__main__':
-    # send_text('test@email.com', 'tester@cs.ust.hk', 'Python SMTP Text Test', "Hello, here is the content")
+    send_text('test@email.com', 'tester@cs.ust.hk', 'Python SMTP Text Test', "Hello, here is the content")
     send_mail('test@email.com', 'tester@cs.ust.hk', 'Python SMTP Attachment Test', "Hello, here is the content",
               files='../LICENSE')

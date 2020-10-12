@@ -186,7 +186,7 @@ class MessageSave:
                 # We hit the boundary, it is the time to save the attachment
                 if data_line == ("--" + boundary) or data_line == ("--" + boundary + "--") or data_line == boundary:
                     # If this part is using un-supported encoding method
-                    if encoding not in ['base64', '7bit']:
+                    if encoding not in ['base64', '7bit', 'quoted-printable']:
                         # Display a line in message.txt to indicate this attachment encounters problem
                         attachments.append(file_name + ' (discarded due to unknown encoding method)')
 
