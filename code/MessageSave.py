@@ -125,9 +125,8 @@ class MessageSave:
         # This while loop crops the non-MIME parts in MIME email
         while True:
             data_line = data.readline().strip()
-            if data_line == '':
+            if not boundary and data_line == '':
                 break
-            data_line = data_line.rstrip()
             # Check if we meet the boundary in MIME message
             if mime and data_line[:2] == '--' and data_line[2:] == boundary:
                 break

@@ -17,7 +17,7 @@ import threading
 import re
 from MessageSave import MessageSave
 
-RE_DOMAIN = r'(([\w\d_]+\.)+\w+)'
+RE_DOMAIN = r'(localhost|([\w\d_]+\.)+\w+)'
 print(RE_DOMAIN)
 RE_DOMAINS = rf'\s*({RE_DOMAIN}|\[{RE_DOMAIN}(, *{RE_DOMAIN})*])\s*?'
 print(RE_DOMAINS)
