@@ -21,6 +21,34 @@ from io import StringIO
 import os
 
 
+def parse_headers(data):
+    format = {
+        'Content-Type': 'list',
+        'Content-Disposition': 'list'
+    }
+    lines = []
+
+    for line in data:
+        line = line.strip()
+        if line == '':
+            break
+        if ':' in line:
+            lines.append(line)
+        else:
+            lines[-1] += line
+
+    headers = {}
+    for line in lines:
+        spt = line.split(':')
+        key = spt[0].strip()
+        if format.get(key) == 'list':
+            value = [x.strip() for x in spt[1].split(';')]
+        else:
+            value = spt[1].strip()
+        headers[key] = value
+
+    return headers
+
 # Class to save the message and attachment
 class MessageSave:
     CRLF = '\r\n'
@@ -32,111 +60,58 @@ class MessageSave:
         # receiver of the message
         self.To = To
         # the body of message
-        self.rawData = wholeBody
+        self.raw_data = wholeBody
 
     @property
     def save(self):
         Body = "From: " + self.From + self.CRLF + "To: " + self.To + self.CRLF
         # Use StringIO to read string as a file
-        Data = StringIO(self.rawData)
+        data = StringIO(self.raw_data)
 
-        # Boolean flags for header information
-        base64Encoded = False
-        _7bitEncoded = False
+        encoding = ''
         mime = False
         multipart = False
-        plainText = False
-        contentType = False
+        plain_text = False
+        content_type = None
 
         # Boolean flags for header processing
-        isHeader = True
-        isMultiLine = False
+        is_header = True
 
         # boundary identification string
         boundary = ''
         # Sting for encoded message body
-        encodedBody = ''
+        encoded_body = ''
         # directory for saving files
         directory = self.FindVacancy('../emails/', 'email')
 
         # String for attachment appendix
-        attachment = ''
+        attachments = []
         # String for filename to be saved
-        fileName = ''
+        file_name = ''
         # Create the directory
         Path(directory).mkdir(parents=True)
 
         # Read the message header for the parameters used in this Email
-        while True:
-            dataLine = Data.readline()
-            if dataLine == '':
-                break
-            dataLine = dataLine.rstrip()
-            encodedBody += dataLine + self.CRLF
+        headers = parse_headers(data)
+        print('Headers', headers)
+        Body += "From: " + headers['From'] + self.CRLF
+        Body += "To: " + headers['To'] + self.CRLF
+        Body += "Subject: " + headers['Subject'] + self.CRLF
 
-            # Save the Message Header Field (listed in project specification) to the message.txt
-            # Different mail client may have different mail struct, you can modify the code here to satify different mail client.
-            if re.fullmatch('^From:.*', dataLine) or re.fullmatch('^To:.*', dataLine):
-                Body += dataLine + self.CRLF
-            # Save Subject
-            elif re.fullmatch(f'Subject: .*', dataLine):
-                Body += dataLine + self.CRLF
-            # Break the while loop if all the header lines have been processed
-            elif dataLine == '':
-                break
-            # Check all the tags in Content-Type (may be multiple line)
-            elif re.fullmatch('Content-Type: .+', dataLine) or isMultiLine:
-                Body += dataLine + self.CRLF
-                if not contentType:
-                    # Set up the flag to indicate Content-Type is processing
-                    contentType = True
-                    # Crop the "Content-Type:" head
-                    dataLine = dataLine[len('Content-Type: '):]
-
-                # If all the Content-Type tags is read, put down the flag
-                elif not re.fullmatch('''TODO: Fill in''', dataLine):
-                    contentType = False
-
-                # Parse the tags as tokens
-                attribute = dataLine.split(';')
-                for parameter in attribute:
-                    parameter = parameter.strip()
-                    if not parameter:
-                        continue
-
-                    # Check if this tag talks about boundary
-                    if re.fullmatch('boundary=', parameter):
-                        boundary = parameter[parameter.find("\"") + 1:parameter.rfind("\"")]
-                    # Check if this tag talks about multipart
-                    if re.fullmatch('multipart/mixed', parameter):
-                        multipart = True
-                    # Check if this tag talks about text/plain
-                    if re.fullmatch('text/plain', parameter):
-                        plainText = True
-            # check the encoding of the transferred content
-            elif re.fullmatch('Content-Transfer-Encoding:.*', dataLine):
-                Body += dataLine + self.CRLF
-                if re.fullmatch('Content-Transfer-Encoding:\\s*base64\\s*', dataLine):
-                    base64Encoded = True
-                elif re.fullmatch('Content-Transfer-Encoding:\\s*7bit\\s*', dataLine):
-                    _7bitEncoded = True
-            # Check if MIME is enabled in this Email
-            elif re.fullmatch('MIME-Version: .*', dataLine):
-                mime = True
-                Body += dataLine + self.CRLF
-            # Check if invalid header field exist, if yes, it means that this is not header
-            elif not (re.fullmatch('From:.*', dataLine) or re.fullmatch('To:.*', dataLine) or re.fullmatch(
-                    'Message-Id:.*', dataLine) or re.fullmatch('Importance:.*', dataLine) or re.fullmatch(
-                'User-Agent:.*', dataLine) or re.fullmatch('X.+', dataLine) or re.fullmatch('Thread-Index:.*',
-                                                                                            dataLine) or re.fullmatch(
-                'Content-Language:.*', dataLine) or isMultiLine):
-                isHeader = False
-
-            # Check if this header consists of multiple line
-            if re.fullmatch('.*;$', dataLine):
-                isMultiLine = True
+        for parameter in headers['Content-Type']:
+            # Check if this tag talks about boundary
+            if re.fullmatch('boundary=.+', parameter):
+                boundary = parameter[parameter.find("\"") + 1:parameter.rfind("\"")]
+            # Check if this tag talks about multipart
+            elif re.fullmatch('multipart/mixed', parameter):
+                multipart = True
+            # Check if this tag talks about text/plain
+            elif re.fullmatch('text/plain', parameter):
+                plain_text = True
             else:
-                isMultiLine = False
+                print("Unprocessed parameter in Content-Type:", parameter)
+        encoding = headers.get('Content-Transfer-Encoding')
+        mime = 'MIME-Version' in headers
 
         print('headers:', Body)
 
@@ -144,133 +119,117 @@ class MessageSave:
         Body += "-------------------------------------------------" + self.CRLF
 
         # If the above while loop do processing header, discard them
-        if isHeader:
-            encodedBody = ''
+        if is_header:
+            encoded_body = ''
 
         # This while loop crops the non-MIME parts in MIME email
         while True:
-            dataLine = Data.readline()
-            if dataLine == '':
+            data_line = data.readline().strip()
+            if data_line == '':
                 break
-            dataLine = dataLine.rstrip()
+            data_line = data_line.rstrip()
             # Check if we meet the boundary in MIME message
-            # Here we use equals instead of matchs because the matches opration may be confused due to the Escape character in the boudnary string
-            if mime and dataLine[:2] == '--' and dataLine[2:] == boundary:
-                # TODO finished?
+            if mime and data_line[:2] == '--' and data_line[2:] == boundary:
                 break
             # if the Email is non-MIME, Single Part or without header, save the body
-            encodedBody += dataLine + self.CRLF
+            encoded_body += data_line + self.CRLF
 
         # Do it only if the Email is non-MIME, Single Part or without header
-        if not multipart or not mime or not isHeader:
+        if not multipart or not mime or not is_header:
             # If it is base64 encoded, decode it and place it at message.txt
-            if base64Encoded and len(encodedBody) > 0:
-                Body += base64.b64decode(encodedBody).decode()
+            if encoding == 'base64' and len(encoded_body) > 0:
+                print(encoded_body)
+                Body += base64.b64decode(encoded_body).decode()
             else:
-                Body += encodedBody
+                Body += encoded_body
         # This block is only for Multipart Message
         else:
-            # isHeader is reused to indicate MIME header is processing
-            isHeader = True
             # A flag to indicate MIME-style message.txt is filled or not
             bodyFilled = False
             # Reset the encodedBody
-            encodedBody = ''
+            encoded_body = ''
+
             # This while loop loops for each part
             while True:
-                dataLine = Data.readline()
-                if dataLine == '':
-                    break
-                dataLine = dataLine.rstrip()
-                # We are processing MIME header
-                if isHeader:
-                    # Turn down the flag if all header is processed
-                    if dataLine == '':
-                        isHeader = False
-                    # Check the supported encoding method (base64/7bit) and set the corresponding flags
-                    elif re.fullmatch('''TODO: Fill in''', dataLine):
-                        '''TODO: Fill in'''
-                        Body += dataLine + self.CRLF + self.CRLF
-                    elif re.fullmatch('''TODO: Fill in''', dataLine):
-                        '''TODO: Fill in'''
-                        Body += dataLine + self.CRLF + self.CRLF
-                    # Check the Content-Type tags, Same as above
-                    elif re.fullmatch('Content-Type:.*', dataLine) or contentType:
-                        Body += dataLine + self.CRLF
-                        if not contentType:
-                            contentType = True
-                            dataLine = dataLine[13:]
-                        elif not re.fullmatch('.*;$', dataLine):
-                            contentType = False
+                if is_header:
+                    headers = parse_headers(data)
+                    if len(headers) == 0:
+                        break
 
-                        attribute = dataLine.split(';')
-                        for parameter in attribute:
-                            # We get the filename of this attachment
-                            if re.fullmatch('\\s*name=.*', parameter):
-                                fileName = parameter[parameter.find("\"") + 1:parameter.rfind("\"")]
-                                # Check if the filename is encoded. If so, we decode the filename
-                                if re.fullmatch('^=\\?.+\\?B\\?.*', fileName):
-                                    encoding = fileName[2:fileName.find('?B?')]
-                                    fileName = fileName[fileName.find('?B?') + 3:]
-                                    fileName = base64.b64decode(fileName).decode(encoding)
-                                print("filename=" + fileName)
-                            # If this part is text/plain or not
-                            if re.fullmatch('\\s*text/plain.*', parameter):
-                                plainText = True
+                    print('Headers', headers)
+                    for parameter in headers['Content-Type']:
+                        # If this part is text/plain or not
+                        if parameter == 'text/plain':
+                            plain_text = True
+                        elif parameter == 'application/octet-stream':
+                            encoding = 'base64'
+                        else:
+                            print("Unprocessed parameter in Content-Type:", parameter)
+                    mime = 'MIME-Version' in headers
+                    encoding = headers.get('Content-Transfer-Encoding') or encoding
+                    is_header = False
+                    disposition = headers.get('Content-Disposition') or headers.get('Content-Type')
+                    if disposition:
+                        if type(disposition) == str:
+                            disposition = [disposition]
+                        for e in disposition:
+                            if e.startswith('filename') or e.startswith('name'):
+                                file_name = e[e.find("\"") + 1:e.rfind("\"")]
+
+                    # If this part doesn't give the filename, use "Attachment" as default
+                    file_name = file_name or "Attachment"
+
+                data_line = data.readline().strip()
+                if data_line == '':
+                    continue
+                if data_line == '.':
+                    break
                 # We hit the boundary, it is the time to save the attachment
-                elif dataLine == ("--" + boundary) or dataLine == ("--" + boundary + "--"):
+                if data_line == ("--" + boundary) or data_line == ("--" + boundary + "--") or data_line == boundary:
                     # If this part is using un-supported encoding method
-                    if (not _7bitEncoded) and (not base64Encoded):
-                        # If this part doesn't give the filename, use "Attachment" as default
-                        if fileName == '':
-                            fileName = 'Attachment'
-                        # Check if the filename already exists. If so, we choose a new one
-                        fileName = str(self.FindVacancy(str(directory) + '\\' + fileName))
+                    if encoding not in ['base64', '7bit']:
                         # Display a line in message.txt to indicate this attachment encounters problem
-                        attachment += fileName[fileName.rfind(
-                            '\\') + 1:] + ' (discarded due to unknown encoding method)' + self.CRLF
+                        attachments.append(file_name + ' (discarded due to unknown encoding method)')
+
                     # If this part is the first MIME-style text message, serve it as message body
                     # (This part should be no attachment filename and Content-type is text/plain)
-                    elif (not bodyFilled) and plainText and fileName == '':
+                    elif not bodyFilled and plain_text:
+                        print("Writing text")
                         bodyFilled = True
-                        if base64Encoded:
-                            Body += base64.b64decode(encodedBody).decode()
+                        if encoding == 'base64':
+                            Body += base64.b64decode(encoded_body).decode()
                         else:
-                            Body += encodedBody
+                            Body += encoded_body
                     # For other supported attachment, process it here
                     else:
-                        if fileName == '':
-                            fileName = 'Attachment'
-                        fileName = str(self.FindVacancy(str(directory) + '\\' + fileName))
-                        # Open the file for writing
-                        with Path(fileName).open('wb') as f:
-                            if base64Encoded:
-                                f.write(base64.b64decode(encodedBody))
+                        print("Writing attachment", file_name)
+                        attachments.append(file_name)
+                        with Path(os.path.join(directory, file_name)).open('wb') as f:
+                            if encoding == 'base64':
+                                f.write(base64.b64decode(encoded_body))
                             else:
-                                f.write(encodedBody.encode())
-                        # Display a line in message.txt to indicate this attachment
-                        attachment += fileName[fileName.rfind('\\') + 1:] + self.CRLF
+                                f.write(encoded_body.encode())
 
                     # Reset the necessary flags and variable for next MIME part.
-                    base64Encoded = '''TODO: Fill in'''
-                    _7bitEncoded = '''TODO: Fill in'''
-                    plainText = False
-                    isHeader = True
-                    encodedBody = ''
-                    fileName = ''
+                    plain_text = False
+                    is_header = True
+                    encoded_body = ''
+                    file_name = ''
                 # In normal case, just accumulate the string read
                 else:
-                    encodedBody += dataLine + self.CRLF
+                    encoded_body += data_line + self.CRLF
 
         # Finally we save the message body to message.txt
         # Append the attachment information at the end of the message.txt
         if multipart and mime:
-            Body += "-------------------------------------------------" + self.CRLF + "File(s) of Attachment :" + self.CRLF + attachment
+            Body += self.CRLF + "-------------------------------------------------" + self.CRLF + "File(s) of Attachment :" + self.CRLF + self.CRLF.join(
+                attachments)
             print("multipart and mime=" + str(multipart) + " " + str(mime))
-            print("attachment=" + attachment)
+            print("attachment=" + self.CRLF.join(attachments))
 
         # Open the message.txt file and write it
         with Path(os.path.join(str(directory), 'message.txt')).open('wb') as f:
+            print("Writing body", Body)
             f.write(Body.encode())
 
         return True
